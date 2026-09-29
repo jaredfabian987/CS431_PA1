@@ -169,7 +169,7 @@ A correct way to get per-run CPU time is to call getrusage(RUSAGE_CHILDREN, ...)
 **(c)** What would `getrusage(RUSAGE_SELF, ...)` have reported instead, and
 roughly what number would you have seen in your report?
 
-So, getrusage(RUSAGE_SELF, ...) would report the CPU time used by the ptime process itself instead of the child command. The value would normally be very small, around 0.000 seconds or a few thousandths of a second, because ptime spends most of its time waiting for the child instead of doing CPU-intensive work.
+getrusage(RUSAGE_SELF, ...) would report the CPU time used by the ptime program itself instead of the child. The number would usually be very small because ptime spends most of its time waiting for the child to finish instead of using the CPU.
 ---
 
 ## Optional: stretch features
