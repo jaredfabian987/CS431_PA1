@@ -13,8 +13,10 @@
 #include <stdio.h>
 
 int main(void)
-{
+{   
+    // stdout: coutput by "b> out,txt"
     printf("noisy: this line is on stdout\n");
+    // stderr: not caputred, so it stays there
     fprintf(stderr, "noisy: this line is on stderr\n");
     return 0;
 }

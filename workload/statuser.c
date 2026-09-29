@@ -15,32 +15,38 @@
  * Build: gcc -Wall -Wextra -pthread -std=c11 -O2 -o statuser statuser.c
  */
 #define _POSIX_C_SOURCE 200809L
-
+ 
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+ 
+// show correct usage
 static void usage(void)
 {
     fprintf(stderr, "statuser: usage: statuser exit N | statuser signal N\n");
 }
-
+ 
 int main(int argc, char *argv[])
 {
+    // needs a mode and a number
     if (argc != 3) {
         usage();
         return 2;
     }
-
+ 
+    // text to number
     long n = strtol(argv[2], NULL, 10);
-
+ 
+    // mode 1: normal exit with code n
     if (strcmp(argv[1], "exit") == 0) {
         printf("statuser: exiting with code %ld\n", n);
         fflush(stdout);
+        // exit codes are only 0-255
         return (int)(n & 0xff);
-    }
-
+    } // end of exit mode
+ 
+    // mode 2: die from signal n
     if (strcmp(argv[1], "signal") == 0) {
         printf("statuser: raising signal %ld on myself\n", n);
         fflush(stdout);            /* flush before we die, or nothing prints */
@@ -48,8 +54,9 @@ int main(int argc, char *argv[])
         /* Reached only if the signal was ignored or handled. */
         fprintf(stderr, "statuser: signal %ld did not kill me\n", n);
         return 3;
-    }
-
+    } // end of signal mode
+ 
+    // unknown mode
     usage();
     return 2;
 }
