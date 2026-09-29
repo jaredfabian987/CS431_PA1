@@ -1,59 +1,60 @@
-# CS 433 PA1 — starter kit
+# CS 433 PA1 — ptime
 
-Everything here already builds and runs. Start by proving that:
+Everything here builds and runs with:
 
 ```
 make
 ./ptime /bin/echo hello
+
 ```
 
-You will see a report with the right shape and all-zero numbers, because no
-child process exists yet. Your job is in `ptime.c`, at the five `TODO` markers.
+The program creates a child process, runs the requested command, waits for it to finish, and reports the child process status along with wall time, user CPU time, and system CPU time.
 
 ## What is in this kit
 
 | File | What it is |
 |---|---|
-| `PA1_instructions.md` | The assignment handout. Read it first; it is the specification. |
-| `ptime.c` | The one file you edit. Five TODOs in `main()`. |
+| `PA1_instructions.md` | The assignment handout and specification. |
+| `ptime.c` | Our completed implementation of `ptime`. |
 | `Makefile` | Builds `ptime` and the workload programs. `make test` runs the self-check. |
-| `analysis.md` | The five written questions. Fill it in; it is 20 of the 100 points. |
-| `README.md` | This file. **You replace it** — see "Before you submit" below. |
-| `workload/spin.c` | Burns CPU without sleeping. Tests your **user CPU** number. |
-| `workload/sleeper.c` | Sleeps without using CPU. Tests your **wall clock** number. |
-| `workload/statuser.c` | Exits with a chosen code, or kills itself with a chosen signal. Tests your **status** reporting. |
-| `workload/noisy.c` | Writes one line to stdout and one to stderr. Tests that your report stays on **stderr**. |
-| `workload/buffer_trap.c` | The demonstration for question 1. Run it two ways. |
-| `tests/` | The 14 self-check tests. `tests/README.md` says what each one catches. |
+| `analysis.md` | Our completed answers to the five written analysis questions. |
+| `README.md` | This file. |
+| `workload/spin.c` | Burns CPU without sleeping and tests user CPU time. |
+| `workload/sleeper.c` | Sleeps without using much CPU and tests wall-clock time. |
+| `workload/statuser.c` | Exits with a chosen code or signal and tests status reporting. |
+| `workload/noisy.c` | Writes to stdout and stderr and tests that the report stays on stderr. |
+| `workload/buffer_trap.c` | Demonstrates the buffering issue used in analysis question 1. |
+| `tests/` | The 14 provided self-check tests. |
 
-You do not need to modify anything in `workload/` or in `tests/`. You do not
-need to modify `print_report()` — it already emits the exact format the tests
-compare against, and changing it will cost you points rather than earn them.
-
-The graders run the tests from their own fresh copy of `tests/`, so editing
-yours changes nothing except your ability to find your own bugs.
+We did not modify anything in `workload/` or `tests/`. We also did not modify the provided `print_report()` helper.
 
 ## Before you submit
 
 ```
-make clean && make          # must produce ZERO warnings
-make test                   # must print "all tests passed"
-make clean                  # then tar — no binaries in the submission (PA1_instructions.md §9)
+make clean && make
+make test
+make clean
 ```
 
-Three things students forget every term:
+Names:
 
-1. Put your name(s) on the header line at the top of `ptime.c`.
-2. Put your name(s) in the header of `analysis.md`.
-3. **Replace this file.** `README.md` in your submission is *yours*: your
-   name(s), how to build your program, and anything the grader should know —
-   including any source you cited. Delete everything above this section and
-   write your own. Leaving the starter's README in place is worth 0 on the
-   authorship line of the rubric.
+Kiernan Flieh  
+Cyril Tabaranza  
+Nathan Nguyen  
+Jared Fabian  
+Nick Pieratos
 
-`PA1_instructions.md` §9 has the exact tarball name and layout.
+Built on Ubuntu through WSL using GCC 13.3.0 and tested on the CSUSM CS433 course server using GCC 11.5.0.
+
+The program uses `fork()`, `execvp()`, `waitpid()`, `clock_gettime(CLOCK_MONOTONIC, ...)`, and `getrusage(RUSAGE_CHILDREN, ...)`.
+
+The program reports its timing information to stderr and returns the child process's exit code, or `128 + signal number` if the child is terminated by a signal.
+
+Sources cited: None.
 
 ## If `make test` cannot find the tests
 
-The kit ships `tests/` next to this `Makefile`. If yours is missing, download
-the kit again from Canvas rather than working without it.
+The `tests/` directory should be located next to the `Makefile`. Run the provided test suite with:
+
+``` make test  ```
+
