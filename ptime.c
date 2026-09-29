@@ -2,8 +2,8 @@
  * CS 433 Operating Systems -- Fall 2026 -- CSU San Marcos
  * PA1: ptime -- run a command as a child process and time it.
  *
- * NAME(S): <your name here>   (every member's name if you are working in a group)
- * DATE:    <date>
+ * NAME(S): <Jared Fabian, Cyril Tabaranza, Nathan Nguyen, Nick Pieratos, Kiernan Flieh>
+ * DATE:    <09/28/2026>
  * ===========================================================================
  *
  * This file compiles and runs AS GIVEN. Try it first:
@@ -128,54 +128,107 @@ int main(int argc, char *argv[])
      * already a valid argument vector for execvp(). No copying needed. */
     char **cmd = &argv[1];
 
-    /* ---------------------------------------------------------------
-     * TODO 1 -- Read the clock BEFORE you create the child.
-     *   clock_gettime(CLOCK_MONOTONIC, &t0);
-     *   Check the return value. Why CLOCK_MONOTONIC and not CLOCK_REALTIME?
-     *   Question 3 of analysis.md asks you.
-     *
-     * TODO 2 -- Empty the stdio buffers, then fork().
-     *   One function call empties them. Run ./workload/buffer_trap first if
-     *   you do not know which one or why (Question 1 of analysis.md).
-     *   Handle fork() returning -1.
-     *
-     * TODO 3 -- In the child: execvp(cmd[0], cmd).
-     *   execvp only returns if it FAILED. Save errno immediately, print
-     *       ptime: cannot run 'NAME': STRERROR
-     *   to stderr, and leave with _exit(127) if errno == ENOENT, otherwise
-     *   _exit(126). Use _exit, not exit, and not return.
-     *
-     * TODO 4 -- In the parent: waitpid(pid, &status, 0).
-     *   waitpid can fail with EINTR if a signal arrives while you wait; that
-     *   is not a real error, so retry. Any other failure is fatal.
-     *   Then read the clock again, and call
-     *       getrusage(RUSAGE_CHILDREN, &ru)
-     *   to get the child's user and system CPU time.
-     *
-     * TODO 5 -- Report and propagate.
-     *   Call print_report(stderr, cmd, pid, status, wall, user, sys).
-     *   Then return the child's exit code, or 128 + signal number if the
-     *   child was killed by a signal. This is what your shell does, which is
-     *   why `echo $?` after a Ctrl-C shows 130.
-     * --------------------------------------------------------------- */
 
-    fprintf(stderr, "ptime: STUB -- no child was created. "
-                    "The report below is a placeholder.\n");
+    // t0 is the time before the child starts, t1 if the time after it finishes
+    struct timespec t0, t1;
+    // check the current time
+    if (clock_gettime(CLOCK_MONOTONIC, &t0) != 0) { 
+         // say what went wrong 
+        perror("ptime: clock_gettime");
+        // stop the program, exit code 2
+        return PTIME_FAILURE; 
+    }
+    
+     // print out anything we are holding onto before making a copy of ourselves
+    fflush (NULL);
+    
+    // make a copy of this processs, child gets 0, parents gets Child's ID
+    pid_t childPid = fork(); 
+   
+    // if the forked failed
+    if (childPid < 0){
+        // say what went wrong
+        perror("ptime: fork");
+        // stop the program, exit code 2
+        return PTIME_FAILURE;
+    } 
 
-    /* Placeholder values so the stub compiles and runs. Once your fork/exec/
-     * wait code is in place, t0 and t1 come from clock_gettime() and ru comes
-     * from getrusage(); the three lines that call print_report stay as they
-     * are. Converting the structs to seconds is boilerplate -- it is done for
-     * you here so you can spend your time on the process lifecycle. */
-    struct timespec t0 = {0, 0}, t1 = {0, 0};
-    struct rusage ru;
-    memset(&ru, 0, sizeof ru);
-    int status = 0;                 /* the wait macros read this as "exited 0" */
+    // this part only runs in child
+    if (childPid == 0){
+        // try to become the command we were asked to run
+        execvp(cmd[0], cmd);
+        
+        // we only get here if execvp failed
+        // a succesfull one would never come back
+        //save the reason right away before anything else can erase it
+        int execErrNo = errno;
 
-    print_report(stderr, cmd, (pid_t)0, status,
-                 ts_to_sec(&t1) - ts_to_sec(&t0),
-                 tv_to_sec(&ru.ru_utime),
-                 tv_to_sec(&ru.ru_stime));
+        // say what happened
+        fprintf(stderr, "ptime: cannot run '%s': %s\n", cmd[0], strerror(execErrNo));
+        // command doesn't exist
+        if  (execErrNo == ENOENT){
+            // exit code 127 if the command was not found
+            _exit(127);
+        } else {
+            // command exists but couldn't be run
+            // exit code 126 for any other error
+            _exit(126);
+        }
+    } // end of childPid == 0
 
-    return PTIME_FAILURE;
+    // will hold how the child ended
+    int status;
+    
+    // wait for child specifically to finish
+    pid_t res = waitpid(childPid, &status, 0);
+
+    // if we got interrupted by a signal, that would not be a real error
+    while (res < 0 && errno == EINTR){
+        // just try waiting again
+        res = waitpid(childPid, &status, 0);
+    }
+
+    // any other failure is real
+    if (res < 0) {
+        // say what went wrong and stop the program, exit code 2
+        perror("ptime: waitpid");
+        return PTIME_FAILURE;
+    }
+    
+    // stop the stopwatch now that the child is done
+    if (clock_gettime(CLOCK_MONOTONIC, &t1) != 0) {
+        perror("ptime: clock_gettime");
+        return PTIME_FAILURE;
+    }
+
+    // will hold the CPU usage info from the kernel
+    struct rusage r; 
+    // ask how much CPU time child/children used
+    if (getrusage(RUSAGE_CHILDREN, &r) != 0) {
+        perror("ptime: getrusage");
+        return PTIME_FAILURE;
+    }
+
+    // total real time child took
+    double wall = ts_to_sec(&t1) - ts_to_sec(&t0);
+    // CPU time spent running the child's own code
+    double user = tv_to_sec(&r.ru_utime);
+    // cpu time the  kernel spent working for the child
+    double sys = tv_to_sec(&r.ru_stime);
+
+    // print final report
+    print_report(stderr, cmd, childPid, status, wall, user, sys);
+    // did child finish on its own
+    if (WIFEXITED(status)) {
+         // pass its exit code straight through
+        return WEXITSTATUS(status);
+    }
+
+    // was child killed by signeal isntead
+    if (WIFSIGNALED(status)) {
+        // shell convesntion is 128 + signal number
+        return 128 + WTERMSIG(status);
+    }
+
+    return PTIME_FAILURE;  // should never happen, but just in case
 }
