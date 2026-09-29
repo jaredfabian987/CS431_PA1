@@ -159,7 +159,7 @@ int main(int argc, char *argv[])
         execvp(cmd[0], cmd);
         
         // we only get here if execvp failed
-        // a succesfull one would never come back
+        // a successful one would never come back
         //save the reason right away before anything else can erase it
         int execErrNo = errno;
 
@@ -226,7 +226,7 @@ int main(int argc, char *argv[])
 
     // was child killed by signeal isntead
     if (WIFSIGNALED(status)) {
-        // shell convesntion is 128 + signal number
+        // shell convention is 128 + signal number
         return 128 + WTERMSIG(status);
     }
 
