@@ -119,6 +119,7 @@ static void print_report(FILE *out, char *const cmd[], pid_t pid, int status,
 
 int main(int argc, char *argv[])
 {
+    // no command was given, so there is nothing to run
     if (argc < 2) {
         fprintf(stderr, "ptime: usage: ptime COMMAND [ARG]...\n");
         return PTIME_FAILURE;
@@ -129,45 +130,49 @@ int main(int argc, char *argv[])
     char **cmd = &argv[1];
 
 
-    // t0 is the time before the child starts, t1 if the time after it finishes
+    // t0 is the time before the child starts, t1 is the time after it finishes
     struct timespec t0, t1;
-    // check the current time
-    if (clock_gettime(CLOCK_MONOTONIC, &t0) != 0) { 
-         // say what went wrong 
+    // read the starting time; CLOCK_MONOTONIC never jumps backward, so it is safe for timing
+    if (clock_gettime(CLOCK_MONOTONIC, &t0) != 0) {
+        // say what went wrong
         perror("ptime: clock_gettime");
         // stop the program, exit code 2
-        return PTIME_FAILURE; 
+        return PTIME_FAILURE;
     }
-    
-     // print out anything we are holding onto before making a copy of ourselves
-    fflush (NULL);
-    
-    // make a copy of this processs, child gets 0, parents gets Child's ID
-    pid_t childPid = fork(); 
-   
-    // if the forked failed
+
+    // print out anything we are holding onto before making a copy of ourselves
+    // (fork copies our unflushed output buffer, so without this it prints twice
+    // when stdout is a pipe or a file)
+    // this comes after reading the clock so the flush is included in the timing
+    fflush(NULL);
+
+    // make a copy of this process, child gets 0, parent gets the child's ID
+    pid_t childPid = fork();
+
+    // if the fork failed
     if (childPid < 0){
         // say what went wrong
         perror("ptime: fork");
         // stop the program, exit code 2
         return PTIME_FAILURE;
-    } 
+    }
 
-    // this part only runs in child
+    // this part only runs in the child
     if (childPid == 0){
         // try to become the command we were asked to run
         execvp(cmd[0], cmd);
-        
+
         // we only get here if execvp failed
-        // a successful one would never come back
-        //save the reason right away before anything else can erase it
+        // a successful one never comes back, because it replaces this whole program
+        // save the reason right away before anything else can erase it
         int execErrNo = errno;
 
         // say what happened
         fprintf(stderr, "ptime: cannot run '%s': %s\n", cmd[0], strerror(execErrNo));
         // command doesn't exist
-        if  (execErrNo == ENOENT){
+        if (execErrNo == ENOENT){
             // exit code 127 if the command was not found
+            // _exit (not exit) so we don't flush the buffers we inherited from the parent
             _exit(127);
         } else {
             // command exists but couldn't be run
@@ -178,15 +183,15 @@ int main(int argc, char *argv[])
 
     // will hold how the child ended
     int status;
-    
-    // wait for child specifically to finish
+
+    // wait for that specific child to finish
     pid_t res = waitpid(childPid, &status, 0);
 
-    // if we got interrupted by a signal, that would not be a real error
+    // if we got interrupted by a signal, that is not a real error
     while (res < 0 && errno == EINTR){
         // just try waiting again
         res = waitpid(childPid, &status, 0);
-    }
+    } // end of while EINTR
 
     // any other failure is real
     if (res < 0) {
@@ -194,41 +199,45 @@ int main(int argc, char *argv[])
         perror("ptime: waitpid");
         return PTIME_FAILURE;
     }
-    
+
     // stop the stopwatch now that the child is done
+    // this must come after waitpid returns, or the wall time would be too small
     if (clock_gettime(CLOCK_MONOTONIC, &t1) != 0) {
+        // say what went wrong and stop the program, exit code 2
         perror("ptime: clock_gettime");
         return PTIME_FAILURE;
     }
 
     // will hold the CPU usage info from the kernel
-    struct rusage r; 
-    // ask how much CPU time child/children used
+    struct rusage r;
+    // ask how much CPU time our children used (RUSAGE_SELF would measure ptime itself)
     if (getrusage(RUSAGE_CHILDREN, &r) != 0) {
+        // say what went wrong and stop the program, exit code 2
         perror("ptime: getrusage");
         return PTIME_FAILURE;
     }
 
-    // total real time child took
+    // total real time the child took
     double wall = ts_to_sec(&t1) - ts_to_sec(&t0);
     // CPU time spent running the child's own code
     double user = tv_to_sec(&r.ru_utime);
-    // cpu time the  kernel spent working for the child
+    // CPU time the kernel spent working for the child
     double sys = tv_to_sec(&r.ru_stime);
 
-    // print final report
+    // print the final report (to stderr, so the child's output stays clean)
     print_report(stderr, cmd, childPid, status, wall, user, sys);
-    // did child finish on its own
-    if (WIFEXITED(status)) {
-         // pass its exit code straight through
-        return WEXITSTATUS(status);
-    }
 
-    // was child killed by signeal isntead
+    // did the child finish on its own
+    if (WIFEXITED(status)) {
+        // pass its exit code straight through
+        return WEXITSTATUS(status);
+    } // end of WIFEXITED
+
+    // was the child killed by a signal instead
     if (WIFSIGNALED(status)) {
         // shell convention is 128 + signal number
         return 128 + WTERMSIG(status);
-    }
+    } // end of WIFSIGNALED
 
     return PTIME_FAILURE;  // should never happen, but just in case
 }
